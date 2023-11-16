@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
-"""
-BD class
-"""
+""" Database for ORM """
 
 from sqlalchemy import create_engine
-from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm.exc import NoResultFound
 from typing import TypeVar
-from user import Base, User
-
-
-DATA = ['id', 'email', 'hashed_password', 'session_id', 'reset_token']
+from user import Base
+from user import User
 
 
 class DB:
+    """ DB Class for Object Reational Mappin """
 
     def __init__(self):
+        """ Constructor Method """
         self._engine = create_engine("sqlite:///a.db", echo=False)
         Base.metadata.drop_all(self._engine)
         Base.metadata.create_all(self._engine)
@@ -25,49 +23,52 @@ class DB:
 
     @property
     def _session(self):
+        """ Session Getter Method """
         if self.__session is None:
             DBSession = sessionmaker(bind=self._engine)
             self.__session = DBSession()
         return self.__session
 
     def add_user(self, email: str, hashed_password: str) -> User:
-        """add user to database
-
-        Args:
-            email (string): email of user
-            hashed_password (string): password of user
-        Returns:
-            User: user created
+        """ Adds user to database
+        Return: User Object
         """
-        if not email or not hashed_password:
-            return
         user = User(email=email, hashed_password=hashed_password)
-        session = self._session
-        session.add(user)
-        session.commit()
+        self._session.add(user)
+        self._session.commit()
         return user
 
     def find_user_by(self, **kwargs) -> User:
-        """find user by some arguments
-
-        Returns:
-            User: user found or raise error
+        """ Finds user by key word args
+        Return: First row found in the users table as filtered by kwargs
         """
+        if not kwargs:
+            raise InvalidRequestError
+
+        column_names = User.__table__.columns.keys()
+        for key in kwargs.keys():
+            if key not in column_names:
+                raise InvalidRequestError
+
         user = self._session.query(User).filter_by(**kwargs).first()
-        if not user:
+
+        if user is None:
             raise NoResultFound
+
         return user
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """Update user
-
-        Args:
-            user_id (int): id of user
+        """ Update users attributes
+        Returns: None
         """
         user = self.find_user_by(id=user_id)
-        for key, val in kwargs.items():
-            if key not in DATA:
+
+        column_names = User.__table__.columns.keys()
+        for key in kwargs.keys():
+            if key not in column_names:
                 raise ValueError
-            setattr(user, key, val)
+
+        for key, value in kwargs.items():
+            setattr(user, key, value)
+
         self._session.commit()
-        return None
